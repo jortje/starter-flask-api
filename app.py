@@ -12,11 +12,7 @@ def index():
         month = request.form.get('month') or '12'
         try:
             byte_io = generate_macro_data(year, month)
-            return send_file(
-                byte_io,
-                attachment_filename=f"MacroData_{year}_{month}.xlsx",
-                as_attachment=True
-            )
+            return send_file(file_path, as_attachment=True, download_name='MacroData.xlsx')
         except ValueError as e:
             return render_template('index.html', error=str(e))
         except Exception as e:
