@@ -1,7 +1,7 @@
-import os
-import boto3
+import io
 import pandas as pd
 import requests
+import boto3
 from botocore.exceptions import NoCredentialsError
 
 # URLs for the datasets
@@ -105,9 +105,6 @@ def main(year, month):
     gdp_df = pd.DataFrame([gdp_info]) if gdp_info else pd.DataFrame()
     hpi_df = pd.DataFrame([hpi_info]) if hpi_info else pd.DataFrame()
 
-    # Define Excel file path
-    excel_file_path = f'MacroData_{year}_{month:02d}.xlsx'
-
     # Prepare the source information dataframe
     sources_info = {
         'Dataset': ['Unemployment', 'GDP', 'HPI'],
@@ -124,19 +121,44 @@ def main(year, month):
     }
     sources_df = pd.DataFrame(sources_info)
 
-    # Write data to the Excel file
-    with pd.ExcelWriter(excel_file_path, engine='xlsxwriter') as writer:
+    # Create an in-memory bytes buffer for the Excel file
+    output = io.BytesIO()
+
+    # Write dataframes to the buffer
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         if not unemployment_df.empty:
             unemployment_df.to_excel(writer, sheet_name='Unemployment', index=False)
         if not gdp_df.empty:
             gdp_df.to_excel(writer, sheet_name='GDP', index=False)
         if not hpi_df.empty:
             hpi_df.to_excel(writer, sheet_name='HPI', index=False)
-        # Write the sources information in the same Excel file
         sources_df.to_excel(writer, sheet_name='Sources', index=False)
 
-    # Upload file to S3 and return the file path
-    if upload_file_to_s3(excel_file_path, S3_BUCKET):
-        return excel_file_path
-    else:
-        raise Exception("Failed to upload file to S3")
+    # Important: move the cursor to the start of the stream
+    output.seek(0)
+
+    # Get S3 client
+    s3_client = boto3.client(
+        's3',
+        region_name='eu-west-3',
+        aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
+        aws_session_token=os.getenv('AWS_SESSION_TOKEN')  # if you are using temporary credentials
+    )
+
+    file_name = f'MacroData_{year}_{month:02d}.xlsx'
+    bucket_name = os.getenv('CYCLIC_BUCKET_NAME')
+
+    try:
+        # Upload the file to S3
+        s3_client.upload_fileobj(output, bucket_name, file_name)
+
+        # Generate a URL to download the file
+        url = s3_client.generate_presigned_url('get_object',
+                                               Params={'Bucket': bucket_name,
+                                                       'Key': file_name},
+                                               ExpiresIn=3600)
+    except NoCredentialsError:
+        raise Exception("AWS credentials are not available")
+
+    return url
