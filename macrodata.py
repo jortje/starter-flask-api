@@ -1,11 +1,40 @@
+import os
+import boto3
 import pandas as pd
 import requests
-import io  # Import the io module to use in-memory bytes buffers
+from botocore.exceptions import NoCredentialsError
 
 # URLs for the datasets
 UNEMPLOYMENT_URL = 'https://opendata.cbs.nl/ODataApi/odata/80590ned/UntypedDataSet'
 GDP_URL = 'https://opendata.cbs.nl/ODataApi/odata/84106NED/UntypedDataSet'
 HPI_URL = 'https://opendata.cbs.nl/ODataApi/odata/84064NED/UntypedDataSet'
+
+# Your Cyclic S3 bucket name
+S3_BUCKET = os.environ.get('CYCLIC_BUCKET_NAME')
+
+# Initialize S3 client
+s3_client = boto3.client('s3')
+
+def upload_file_to_s3(file_name, bucket_name, object_name=None):
+    """Upload a file to an S3 bucket
+
+    :param file_name: File to upload
+    :param bucket_name: Bucket to upload to
+    :param object_name: S3 object name. If not specified then file_name is used
+    :return: True if file was uploaded, else False
+    """
+
+    # If S3 object_name was not specified, use file_name
+    if object_name is None:
+        object_name = file_name
+
+    # Upload the file
+    try:
+        response = s3_client.upload_file(file_name, bucket_name, object_name)
+    except NoCredentialsError:
+        print("Credentials not available")
+        return False
+    return True
 
 def download_dataset(url):
     response = requests.get(url)
@@ -13,12 +42,11 @@ def download_dataset(url):
     return response.json()
 
 def get_unemployment_data(year, month, dataset):
-    period = f"{year}MM{month:02d}"
+    period = f"{year}MM{month:02d}"  # Format the period as "YYYYMM"
     monthly_data = next(
-        (record for record in dataset 
-         if record['Perioden'].strip() == period and
-            record['Leeftijd'].strip() == '52052' and 
-            record['Geslacht'].strip() == 'T001038'),
+        (record for record in dataset if record['Perioden'].strip() == period and
+         record['Leeftijd'].strip() == '52052' and 
+         record['Geslacht'].strip() == 'T001038'),
         None
     )
     if not monthly_data:
@@ -30,7 +58,7 @@ def get_unemployment_data(year, month, dataset):
     }
 
 def get_gdp_data(year, dataset):
-    year_str = f"{year}JJ00"
+    year_str = f"{year}JJ00"  # Format the period as "YYYYJJ00"
     yearly_gdp_data = next((record for record in dataset if record['Perioden'] == year_str), None)
     if not yearly_gdp_data:
         return None
@@ -77,6 +105,9 @@ def main(year, month):
     gdp_df = pd.DataFrame([gdp_info]) if gdp_info else pd.DataFrame()
     hpi_df = pd.DataFrame([hpi_info]) if hpi_info else pd.DataFrame()
 
+    # Define Excel file path
+    excel_file_path = f'MacroData_{year}_{month:02d}.xlsx'
+
     # Prepare the source information dataframe
     sources_info = {
         'Dataset': ['Unemployment', 'GDP', 'HPI'],
@@ -93,22 +124,19 @@ def main(year, month):
     }
     sources_df = pd.DataFrame(sources_info)
 
-    # Create an in-memory bytes buffer
-    output = io.BytesIO()
-
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+    # Write data to the Excel file
+    with pd.ExcelWriter(excel_file_path, engine='xlsxwriter') as writer:
         if not unemployment_df.empty:
             unemployment_df.to_excel(writer, sheet_name='Unemployment', index=False)
         if not gdp_df.empty:
             gdp_df.to_excel(writer, sheet_name='GDP', index=False)
         if not hpi_df.empty:
             hpi_df.to_excel(writer, sheet_name='HPI', index=False)
-
         # Write the sources information in the same Excel file
         sources_df.to_excel(writer, sheet_name='Sources', index=False)
 
-    # Go to the beginning of the in-memory bytes buffer
-    output.seek(0)
-
-    # Return the in-memory bytes buffer instead of file path
-    return output
+    # Upload file to S3 and return the file path
+    if upload_file_to_s3(excel_file_path, S3_BUCKET):
+        return excel_file_path
+    else:
+        raise Exception("Failed to upload file to S3")
