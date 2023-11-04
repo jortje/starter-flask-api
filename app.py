@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, send_file
 from macrodata import main as generate_macro_data
 import os
+import traceback  # Import the traceback module
 
 app = Flask(__name__)
 
@@ -15,9 +16,12 @@ def index():
         except ValueError as e:
             return render_template('index.html', error=str(e))
         except Exception as e:
-            # Log the error message for debugging purposes
-            print(f"An error occurred: {e}")  # or use logging
-            return render_template('index.html', error="An error occurred while generating the file.")
+            # Capture the full traceback
+            error_info = traceback.format_exc()
+            # Log the detailed error message
+            print(f"An error occurred: {error_info}")  # This will print the full traceback
+            # Return the error message to the user
+            return render_template('index.html', error="An error occurred while generating the file. Please check the server logs for more details.")
     return render_template('index.html', error=None)
 
 if __name__ == '__main__':
