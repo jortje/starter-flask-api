@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, send_file
 from macrodata import main as generate_macro_data
-import os
-import traceback  # Import the traceback module
+from io import BytesIO  # Import BytesIO to handle byte streams
+import traceback  # Import traceback to capture errors
 
 app = Flask(__name__)
 
@@ -11,17 +11,20 @@ def index():
         year = request.form.get('year')
         month = request.form.get('month') or '12'
         try:
-            file_path = generate_macro_data(year, month)
-            return send_file(file_path, as_attachment=True)
+            byte_io = generate_macro_data(year, month)
+            return send_file(
+                byte_io,
+                attachment_filename=f"MacroData_{year}_{month}.xlsx",
+                as_attachment=True
+            )
         except ValueError as e:
             return render_template('index.html', error=str(e))
         except Exception as e:
             # Capture the full traceback
             error_info = traceback.format_exc()
-            # Log the detailed error message
-            print(f"An error occurred: {error_info}")  # This will print the full traceback
-            # Return the error message to the user
-            return render_template('index.html', error="An error occurred while generating the file. Please check the server logs for more details.")
+            # Display the detailed error message to the user
+            return render_template('index.html', error=f"An error occurred while generating the file: {error_info}")
+
     return render_template('index.html', error=None)
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 import pandas as pd
 import requests
+import io  # Import the io module to use in-memory bytes buffers
 
 # URLs for the datasets
 UNEMPLOYMENT_URL = 'https://opendata.cbs.nl/ODataApi/odata/80590ned/UntypedDataSet'
@@ -12,8 +13,7 @@ def download_dataset(url):
     return response.json()
 
 def get_unemployment_data(year, month, dataset):
-    period = f"{year}MM{month:02d}"  # Format the period as "YYYYMM"
-    # Filter the dataset for the given period, age group, and gender
+    period = f"{year}MM{month:02d}"
     monthly_data = next(
         (record for record in dataset 
          if record['Perioden'].strip() == period and
@@ -30,7 +30,7 @@ def get_unemployment_data(year, month, dataset):
     }
 
 def get_gdp_data(year, dataset):
-    year_str = f"{year}JJ00"  # Format the period as "YYYYJJ00"
+    year_str = f"{year}JJ00"
     yearly_gdp_data = next((record for record in dataset if record['Perioden'] == year_str), None)
     if not yearly_gdp_data:
         return None
@@ -77,10 +77,7 @@ def main(year, month):
     gdp_df = pd.DataFrame([gdp_info]) if gdp_info else pd.DataFrame()
     hpi_df = pd.DataFrame([hpi_info]) if hpi_info else pd.DataFrame()
 
-    # Define Excel file path
-    excel_file_path = f'MacroData_{year}_{month}.xlsx'
-    
-        # Prepare the source information dataframe
+    # Prepare the source information dataframe
     sources_info = {
         'Dataset': ['Unemployment', 'GDP', 'HPI'],
         'Source': [
@@ -96,9 +93,10 @@ def main(year, month):
     }
     sources_df = pd.DataFrame(sources_info)
 
-    # Create a Pandas Excel writer using XlsxWriter as the engine.
-    excel_file_path = f'MacroData_{year}_{month:02d}.xlsx'
-    with pd.ExcelWriter(excel_file_path, engine='xlsxwriter') as writer:
+    # Create an in-memory bytes buffer
+    output = io.BytesIO()
+
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         if not unemployment_df.empty:
             unemployment_df.to_excel(writer, sheet_name='Unemployment', index=False)
         if not gdp_df.empty:
@@ -109,6 +107,8 @@ def main(year, month):
         # Write the sources information in the same Excel file
         sources_df.to_excel(writer, sheet_name='Sources', index=False)
 
-    print(f"Macro data for {year}-{month:02d} has been exported to the Excel file: {excel_file_path}")
-    return excel_file_path
+    # Go to the beginning of the in-memory bytes buffer
+    output.seek(0)
 
+    # Return the in-memory bytes buffer instead of file path
+    return output
