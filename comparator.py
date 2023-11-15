@@ -79,7 +79,7 @@ $(document).ready(function() {
         e.preventDefault();
         $('#results').html('');
         $.ajax({
-            url: '/compare',
+            url: '/comparator/compare',  // Updated URL to match the Blueprint's prefix
             type: 'POST',
             contentType: 'application/json',
             data: JSON.stringify({
