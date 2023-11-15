@@ -1,8 +1,12 @@
 from flask import Flask, render_template, request, redirect
 from macrodata import main as generate_macro_data
+from comparator import comparator_blueprint  # Import the blueprint from comparator.py
 import os
 
 app = Flask(__name__)
+
+# Register the blueprint with the main application
+app.register_blueprint(comparator_blueprint, url_prefix='/comparator')
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
