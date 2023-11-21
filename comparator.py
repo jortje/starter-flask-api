@@ -4,21 +4,7 @@ from difflib import Differ
 # Create a Blueprint for the comparator feature
 comparator_blueprint = Blueprint('comparator', __name__)
 
-
-def extract_file_names(contents, ignore_special_chars=False):
-    """Extracts file names from the directory listing. If 'ignore_special_chars' is True,
-    it ignores lines starting with special characters like '|', '\\', and '-'.
-    """
-    special_chars = '|\\-'
-    file_names = []
-    for line in contents:
-        line = line.strip()
-        if ignore_special_chars and any(line.startswith(char) for char in special_chars):
-            # Skip lines starting with special characters
-            continue
-        if line.endswith('.png') or line.endswith('.txt'):
-            file_names.append(line)
-    return file_names
+def extract_file_names(contents):
     """
     Extracts file names from the directory listing, ignoring lines that don't represent files.
     """
@@ -85,7 +71,6 @@ def comparator_index():
         </div>
     </form>
     <div id="results" class="mt-4"></div>
-        <p class="my-4 text-center">Version 1.0.1</p>
 </div>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
