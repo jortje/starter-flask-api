@@ -6,26 +6,27 @@ import re
 # Create a Blueprint for the comparator feature
 comparator_blueprint = Blueprint('comparator', __name__)
 
-# Function to remove special characters for indirect comparison
-def clean_special_chars(line):
-    return re.sub(r'[-|\\]', '', line).strip()
+def clean_line(line, comparison_type='direct'):
+    if comparison_type == 'indirect':
+        # This will remove the special characters ('|', '\', '-') from the start of the line
+        line = re.sub(r'^[|\\-]+', '', line)
+    return line.strip()
 
-def extract_file_names(contents, comparison_type):
+def extract_file_names(contents, comparison_type='direct'):
     """
     Extracts file names from the directory listing, ignoring lines that don't represent files.
-    If comparison_type is 'indirect', special characters will be ignored.
+    Filters the special characters if comparison_type is 'indirect'.
     """
     file_names = []
     for line in contents:
-        line = line.strip()
-        if comparison_type == 'indirect':
-            line = clean_special_chars(line)
+        line = clean_line(line, comparison_type)
         if line.endswith('.png') or line.endswith('.txt'):
             file_names.append(line)
     return file_names
 
 @comparator_blueprint.route('/', methods=['GET'])
 def comparator_index():
+    # Render a template called 'comparison.html' instead of using an inline HTML string.
     return render_template('comparison.html')
 
 @comparator_blueprint.route('/compare', methods=['POST'])
@@ -43,7 +44,7 @@ def compare_file_trees():
 
     added = [line[2:] for line in diff if line.startswith('+ ')]
     removed = [line[2:] for line in diff if line.startswith('- ')]
-
+    
     return jsonify({
         'added_to_file_tree2': added,
         'removed_from_file_tree1': removed
